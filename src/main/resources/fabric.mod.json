@@ -1,0 +1,29 @@
+{
+	"schemaVersion": 1,
+	"id": "auto-backup",
+	"version": "${version}",
+	"name": "Auto Backup",
+	"description": "Automatically backs up the server world on a schedule.",
+	"authors": [
+		"yentir"
+	],
+	"contact": {
+		"homepage": "https://github.com/djbvdnh/auto-backup",
+		"sources": "https://github.com/djbvdnh/auto-backup",
+		"issues": "https://github.com/djbvdnh/auto-backup/issues"
+	},
+	"license": "MIT",
+	"icon": "assets/auto-backup/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.yentir.autobackup.AutoBackup"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
