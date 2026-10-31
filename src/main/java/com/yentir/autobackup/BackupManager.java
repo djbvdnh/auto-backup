@@ -1,5 +1,6 @@
 package com.yentir.autobackup;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -124,7 +125,7 @@ public class BackupManager {
 		// 重新开始记录；之后只要有玩家在线，tick() 会再把它设回 true
 		playersOnlineSinceLastBackup = false;
 
-		announce(server, "开始备份存档……");
+		announce(server, "开始备份存档……", ChatFormatting.YELLOW);
 
 		// 第 1 步：把内存里的区块、玩家数据全部写到硬盘（相当于 /save-all flush）
 		server.saveEverything(true, true, true);
@@ -148,21 +149,21 @@ public class BackupManager {
 				String message = String.format("备份完成：%s（%s，耗时 %.1f 秒）",
 						target.getFileName(), formatSize(size), seconds);
 				// 回到服务器主线程去收尾，游戏对象只能在主线程里操作
-				server.execute(() -> finish(server, message));
+				server.execute(() -> finish(server, message, ChatFormatting.GREEN));
 			} catch (Exception e) {
 				AutoBackup.LOGGER.error("备份失败", e);
-				server.execute(() -> finish(server, "备份失败：" + e.getMessage()));
+				server.execute(() -> finish(server, "备份失败：" + e.getMessage(), ChatFormatting.RED));
 			}
 		});
 		return true;
 	}
 
 	// 第 4 步：恢复自动保存（相当于 /save-on），并通知结果
-	private void finish(MinecraftServer server, String message) {
+	private void finish(MinecraftServer server, String message, ChatFormatting color) {
 		resumeSaving();
 		currentBackup = null;
 		lastResult = LocalDateTime.now().format(CHAT_TIME) + " " + message;
-		announce(server, message);
+		announce(server, message, color);
 	}
 
 	private void resumeSaving() {
@@ -195,10 +196,12 @@ public class BackupManager {
 		currentBackup = null;
 	}
 
-	private void announce(MinecraftServer server, String message) {
+	private void announce(MinecraftServer server, String message, ChatFormatting color) {
 		AutoBackup.LOGGER.info(message);
 		if (config.announce) {
-			Component text = Component.literal("[自动备份] " + message);
+			// 前缀金色，正文按消息类型着色：进行中黄色、成功绿色、失败红色
+			Component text = Component.literal("[自动备份] ").withStyle(ChatFormatting.GOLD)
+					.append(Component.literal(message).withStyle(color));
 			for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 				player.sendSystemMessage(text);
 			}

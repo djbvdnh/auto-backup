@@ -2,6 +2,7 @@ package com.yentir.autobackup;
 
 import com.mojang.brigadier.CommandDispatcher;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -35,15 +36,16 @@ public final class BackupCommand {
 					String state = manager.isRunning()
 							? "正在备份中……"
 							: "下次自动备份：" + formatDuration(manager.millisUntilNext()) + "后";
-					String message = state + "\n上次结果：" + manager.getLastResult();
-					context.getSource().sendSuccess(() -> Component.literal(message), false);
+					Component message = Component.literal(state).withStyle(ChatFormatting.AQUA)
+							.append(Component.literal("\n上次结果：" + manager.getLastResult()).withStyle(ChatFormatting.GRAY));
+					context.getSource().sendSuccess(() -> message, false);
 					return 1;
 				}))
 				.then(Commands.literal("reload").executes(context -> {
 					BackupConfig config = BackupConfig.load();
 					manager.setConfig(config);
 					context.getSource().sendSuccess(() -> Component.literal(
-							"配置已重新加载，每 " + config.intervalMinutes + " 分钟备份一次"), true);
+							"配置已重新加载，每 " + config.intervalMinutes + " 分钟备份一次").withStyle(ChatFormatting.GREEN), true);
 					return 1;
 				})));
 	}
