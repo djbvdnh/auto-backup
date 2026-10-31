@@ -22,7 +22,7 @@ public class AutoBackup implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(manager::onServerStarted);
 
 		// 服务器关闭前：等待正在进行的备份完成
-		ServerLifecycleEvents.SERVER_STOPPING.register(manager::onServerStopping);
+		ServerLifecycleEvents.SERVER_STOPPING.register(server -> manager.onServerStopping());
 
 		// 注册 /backup 命令
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) ->

@@ -7,6 +7,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -177,7 +179,7 @@ public class BackupManager {
 	 * 服务器关闭前调用：如果正在备份，等它压缩完再让服务器做最后一次保存，
 	 * 否则服务器写文件和我们读文件同时进行，备份可能损坏。
 	 */
-	public void onServerStopping(MinecraftServer server) {
+	public void onServerStopping() {
 		if (timerTask != null) {
 			timerTask.cancel(false);
 			timerTask = null;
@@ -219,7 +221,7 @@ public class BackupManager {
 		try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
 			Files.walkFileTree(worldDir, new SimpleFileVisitor<>() {
 				@Override
-				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) throws IOException {
 					// session.lock 被服务器独占锁住，读不了，也不需要备份
 					if (file.getFileName().toString().equals("session.lock")) {
 						return FileVisitResult.CONTINUE;
