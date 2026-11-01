@@ -43,17 +43,116 @@
 4. 把所选备份解压到临时文件夹，检查无误后替换世界；出错时原世界保持不变
 5. 在服务器根目录创建 `.auto-backup-restart`，然后退出
 
-启动脚本发现 `.auto-backup-restart` 就删除它并重启服务器。在 `start.sh` 的启动循环里，Java 进程退出后加入：
+### 启动脚本
+
+启动脚本发现 `.auto-backup-restart` 后，会删除它并重启服务器。正常 `/stop` 不会创建这个文件，所以不会被误重启。
+
+下面两个脚本复制即用：放在服务器根目录，改好开头的配置，以后都用它来启动服务器。
+
+| 服务器怎么关闭的 | 脚本的反应 |
+|---|---|
+| 回档 | 3 秒后自动重启 |
+| 正常 `/stop` | 退出 |
+| 崩溃 | `AUTO_RESTART` 为 `true` 时 10 秒后重启，否则退出 |
+
+#### Linux / macOS：`start.sh`
 
 ```bash
-if [ -f .auto-backup-restart ]; then
-    rm -f .auto-backup-restart
-    sleep 3
-    continue
-fi
+#!/usr/bin/env bash
+
+# ===== 按你的服务器修改 =====
+JAVA="java"                      # Java 25 的路径，已加入 PATH 就不用改
+JAR="fabric-server-launch.jar"   # 服务端 jar 的文件名
+MEMORY="4G"                      # 最大内存
+AUTO_RESTART=false               # 崩溃后是否自动重启
+# ============================
+
+cd "$(dirname "$0")" || exit 1
+
+RESTORE_FLAG=".auto-backup-restart"
+rm -f "$RESTORE_FLAG"
+
+while true; do
+    "$JAVA" -Xmx"$MEMORY" -jar "$JAR" nogui
+    EXIT_CODE=$?
+
+    if [ -f "$RESTORE_FLAG" ]; then
+        rm -f "$RESTORE_FLAG"
+        echo "[回档] 回档完成，3 秒后重启服务器..."
+        sleep 3 || break
+        continue
+    fi
+
+    if [ "$EXIT_CODE" -eq 0 ]; then
+        echo "服务器已关闭。"
+        break
+    fi
+
+    if [ "$AUTO_RESTART" = true ]; then
+        echo "服务器异常退出（代码 $EXIT_CODE），10 秒后重启，按 Ctrl+C 取消..."
+        sleep 10 || break
+    else
+        echo "服务器异常退出（代码 $EXIT_CODE）。"
+        break
+    fi
+done
 ```
 
-正常 `/stop` 不会创建这个文件，所以不会被误重启。
+第一次使用前执行 `chmod +x start.sh`，之后用 `./start.sh` 启动。
+
+#### Windows：`start.bat`
+
+```bat
+@echo off
+chcp 65001 >nul
+setlocal
+cd /d "%~dp0"
+
+rem ===== 按你的服务器修改 =====
+rem Java 25 的路径，已加入 PATH 就不用改
+set "JAVA=java"
+rem 服务端 jar 的文件名
+set "JAR=fabric-server-launch.jar"
+rem 最大内存
+set "MEMORY=4G"
+rem 崩溃后是否自动重启
+set "AUTO_RESTART=false"
+rem ============================
+
+set "RESTORE_FLAG=.auto-backup-restart"
+if exist "%RESTORE_FLAG%" del /f /q "%RESTORE_FLAG%"
+
+:loop
+"%JAVA%" -Xmx%MEMORY% -jar "%JAR%" nogui
+set "EXIT_CODE=%ERRORLEVEL%"
+
+if exist "%RESTORE_FLAG%" (
+    del /f /q "%RESTORE_FLAG%"
+    echo [回档] 回档完成，3 秒后重启服务器...
+    timeout /t 3 /nobreak >nul
+    goto loop
+)
+
+if "%EXIT_CODE%"=="0" (
+    echo 服务器已关闭。
+    goto end
+)
+
+if /i "%AUTO_RESTART%"=="true" (
+    echo 服务器异常退出（代码 %EXIT_CODE%），10 秒后重启，按 Ctrl+C 取消...
+    timeout /t 10 >nul
+    goto loop
+)
+
+echo 服务器异常退出（代码 %EXIT_CODE%）。
+
+:end
+pause
+```
+
+双击运行即可。用记事本保存时，编码选 **UTF-8**，不要选“带 BOM 的 UTF-8”，否则脚本会报错或者中文显示成乱码。
+
+已经有自己的启动脚本？只要照着上面 `RESTORE_FLAG` 那一段，在 Java 退出后检查 `.auto-backup-restart` 就行。
 
 ## 配置
 
