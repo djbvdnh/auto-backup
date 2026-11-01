@@ -40,3 +40,6 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# 开发过程中的设计文档和实施计划，只留在本地
+docs/superpowers/
