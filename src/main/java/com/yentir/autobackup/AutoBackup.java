@@ -17,6 +17,7 @@ public class AutoBackup implements ModInitializer {
 	public void onInitialize() {
 		// 服务器加载 mod 时最先执行这里。这里只“注册事件”，真正的工作在事件触发时才做
 		BackupManager manager = new BackupManager(BackupConfig.load());
+		RestoreManager restore = new RestoreManager(manager);
 
 		// 服务器启动完成：开始计时，启动定时器
 		ServerLifecycleEvents.SERVER_STARTED.register(manager::onServerStarted);
@@ -24,9 +25,12 @@ public class AutoBackup implements ModInitializer {
 		// 服务器关闭前：等待正在进行的备份完成
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> manager.onServerStopping());
 
+		// 服务器完全关闭、存档释放后：如果确认过回档，就在这时替换世界
+		ServerLifecycleEvents.SERVER_STOPPED.register(restore::onServerStopped);
+
 		// 注册 /backup 命令
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) ->
-				BackupCommand.register(dispatcher, manager));
+				BackupCommand.register(dispatcher, manager, restore));
 
 		LOGGER.info("自动备份已加载");
 	}

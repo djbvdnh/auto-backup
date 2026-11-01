@@ -7,20 +7,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 
-import org.jetbrains.annotations.NotNull;
-
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,13 +19,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * 备份的核心逻辑。
- * 除了 zipWorld / prune 在后台线程运行，其余方法都只在服务器主线程调用。
+ * 后台线程只调用 BackupFiles 做文件操作，其余方法都只在服务器主线程调用。
  */
 public class BackupManager {
 	private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
@@ -85,6 +72,14 @@ public class BackupManager {
 		return lastResult;
 	}
 
+	public Path worldDir(MinecraftServer server) {
+		return server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+	}
+
+	public Path backupRoot(MinecraftServer server) {
+		return server.getServerDirectory().resolve(config.backupDir).toAbsolutePath().normalize();
+	}
+
 	public void onServerStarted(MinecraftServer server) {
 		scheduleNext();
 		timerTask = timer.scheduleAtFixedRate(() -> server.execute(() -> tick(server)), 1, 1, TimeUnit.SECONDS);
@@ -115,8 +110,8 @@ public class BackupManager {
 		}
 		scheduleNext();
 
-		Path worldDir = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
-		Path backupRoot = server.getServerDirectory().resolve(config.backupDir).toAbsolutePath().normalize();
+		Path worldDir = worldDir(server);
+		Path backupRoot = backupRoot(server);
 		if (backupRoot.startsWith(worldDir)) {
 			// 备份目录在存档里面的话，会把备份自己也打包进去，越备份越大
 			AutoBackup.LOGGER.error("备份目录不能放在存档目录里面：{}", backupRoot);
@@ -145,11 +140,11 @@ public class BackupManager {
 		long startTime = System.currentTimeMillis();
 		currentBackup = executor.submit(() -> {
 			try {
-				long size = zipWorld(worldDir, target);
-				prune(backupRoot, worldName, maxBackups);
+				long size = BackupFiles.zipWorld(worldDir, target);
+				BackupFiles.prune(backupRoot, worldName, maxBackups);
 				double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 				String message = String.format("备份完成：%s（%s，耗时 %.1f 秒）",
-						target.getFileName(), formatSize(size), seconds);
+						target.getFileName(), BackupFiles.formatSize(size), seconds);
 				// 回到服务器主线程去收尾，游戏对象只能在主线程里操作
 				server.execute(() -> finish(server, message, ChatFormatting.GREEN));
 			} catch (Exception e) {
@@ -210,62 +205,6 @@ public class BackupManager {
 		}
 	}
 
-	// ---------- 以下两个方法在后台线程运行，只做文件操作，不碰任何游戏对象 ----------
-
-	private static long zipWorld(Path worldDir, Path target) throws IOException {
-		Files.createDirectories(target.getParent());
-		// 先写到 .tmp 文件，全部写完再改名，这样中途失败也不会留下一个损坏的 .zip
-		Path temp = target.resolveSibling(target.getFileName() + ".tmp");
-		String rootName = worldDir.getFileName().toString();
-
-		try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
-			Files.walkFileTree(worldDir, new SimpleFileVisitor<>() {
-				@Override
-				public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) throws IOException {
-					// session.lock 被服务器独占锁住，读不了，也不需要备份
-					if (file.getFileName().toString().equals("session.lock")) {
-						return FileVisitResult.CONTINUE;
-					}
-					// zip 里的路径统一用 /，在 Windows 上也一样
-					String entryName = rootName + "/" + worldDir.relativize(file).toString().replace('\\', '/');
-					ZipEntry entry = new ZipEntry(entryName);
-					entry.setLastModifiedTime(attrs.lastModifiedTime());
-					zip.putNextEntry(entry);
-					Files.copy(file, zip);
-					zip.closeEntry();
-					return FileVisitResult.CONTINUE;
-				}
-			});
-		} catch (IOException e) {
-			Files.deleteIfExists(temp);
-			throw e;
-		}
-
-		Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
-		return Files.size(target);
-	}
-
-	// 只保留最新的 maxBackups 个备份。文件名里的时间格式按字母排序就是按时间排序
-	private static void prune(Path backupRoot, String worldName, int maxBackups) throws IOException {
-		if (maxBackups <= 0) {
-			return;
-		}
-		List<Path> backups;
-		try (Stream<Path> files = Files.list(backupRoot)) {
-			backups = files
-					.filter(path -> {
-						String name = path.getFileName().toString();
-						return name.startsWith(worldName + "_") && name.endsWith(".zip");
-					})
-					.sorted(Comparator.reverseOrder())
-					.toList();
-		}
-		for (int i = maxBackups; i < backups.size(); i++) {
-			Files.delete(backups.get(i));
-			AutoBackup.LOGGER.info("已删除旧备份：{}", backups.get(i).getFileName());
-		}
-	}
-
 	// 守护线程不会阻止 Java 进程退出
 	private static ThreadFactory daemonThread(String name) {
 		return runnable -> {
@@ -273,15 +212,5 @@ public class BackupManager {
 			thread.setDaemon(true);
 			return thread;
 		};
-	}
-
-	private static String formatSize(long bytes) {
-		if (bytes < 1024 * 1024) {
-			return String.format("%.1f KB", bytes / 1024.0);
-		}
-		if (bytes < 1024L * 1024 * 1024) {
-			return String.format("%.1f MB", bytes / (1024.0 * 1024));
-		}
-		return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
 	}
 }

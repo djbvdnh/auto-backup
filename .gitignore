@@ -31,6 +31,8 @@ bin/
 # fabric
 
 run/
+# 单元测试运行时 Minecraft 的日志配置会写到项目根目录
+logs/
 
 # java
 
