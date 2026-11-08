@@ -26,9 +26,19 @@ public class BackupConfig {
 	public String backupDir = "backups";
 	// 备份开始/结束时是否在聊天栏通知在线玩家
 	public boolean announce = true;
+	// 是否开启定时自动备份，/backup on 和 /backup off 会修改它
+	public boolean enabled = true;
+
+	// 配置文件写错时为 true：这时不能写回，否则玩家的原文件会被默认值覆盖。
+	// transient 表示 Gson 不把它写进 JSON
+	private transient boolean readFailed;
+
+	private static Path configFile() {
+		return FabricLoader.getInstance().getConfigDir().resolve(AutoBackup.MOD_ID + ".json");
+	}
 
 	public static BackupConfig load() {
-		Path file = FabricLoader.getInstance().getConfigDir().resolve(AutoBackup.MOD_ID + ".json");
+		Path file = configFile();
 		BackupConfig config = new BackupConfig();
 
 		if (Files.exists(file)) {
@@ -40,6 +50,7 @@ public class BackupConfig {
 			} catch (IOException | JsonParseException e) {
 				// 配置写错了就用默认值，但不覆盖原文件，方便玩家自己修正
 				AutoBackup.LOGGER.error("读取配置文件失败，本次使用默认配置：{}", file, e);
+				config.readFailed = true;
 				return config;
 			}
 		}
@@ -52,11 +63,15 @@ public class BackupConfig {
 		}
 
 		// 写回文件：第一次运行时会生成默认配置，以后新增的配置项也会自动补上
-		config.save(file);
+		config.save();
 		return config;
 	}
 
-	private void save(Path file) {
+	public void save() {
+		if (readFailed) {
+			return;
+		}
+		Path file = configFile();
 		try {
 			Files.createDirectories(file.getParent());
 			Files.writeString(file, GSON.toJson(this));

@@ -19,6 +19,8 @@ import java.util.List;
  * /backup now     立即备份
  * /backup status  查看下次备份时间和上次结果
  * /backup reload  重新读取配置文件
+ * /backup on      开启自动备份
+ * /backup off     停止自动备份
  * /backup list    列出所有备份
  * /backup restore <备份名>  选择要回档的备份
  * /backup confirm 确认回档
@@ -51,6 +53,8 @@ public final class BackupCommand {
 				.then(Commands.literal("status").executes(context -> {
 					String state = manager.isRunning()
 							? "正在备份中……"
+							: !manager.isEnabled()
+							? "自动备份已停止"
 							: "下次自动备份：" + formatDuration(manager.millisUntilNext()) + "后";
 					Component message = Component.literal(state).withStyle(ChatFormatting.AQUA)
 							.append(Component.literal("\n上次结果：" + manager.getLastResult()).withStyle(ChatFormatting.GRAY));
@@ -64,6 +68,8 @@ public final class BackupCommand {
 							"配置已重新加载，每 " + config.intervalMinutes + " 分钟备份一次").withStyle(ChatFormatting.GREEN), true);
 					return 1;
 				}))
+				.then(Commands.literal("on").executes(context -> setEnabled(context.getSource(), manager, true)))
+				.then(Commands.literal("off").executes(context -> setEnabled(context.getSource(), manager, false)))
 				.then(Commands.literal("list").executes(context -> {
 					List<Path> list = restore.listBackups(context.getSource().getServer());
 					if (list.isEmpty()) {
@@ -88,6 +94,20 @@ public final class BackupCommand {
 								.executes(context -> restore.request(context.getSource(),
 										StringArgumentType.getString(context, "name")))))
 				.then(Commands.literal("confirm").executes(context -> restore.confirm(context.getSource()))));
+	}
+
+	private static int setEnabled(CommandSourceStack source, BackupManager manager, boolean enabled) {
+		if (manager.isEnabled() == enabled) {
+			source.sendFailure(Component.literal(enabled ? "自动备份已经是开启状态" : "自动备份已经是停止状态"));
+			return 0;
+		}
+		manager.setEnabled(enabled);
+		String message = enabled
+				? "自动备份已开启，下次备份在 " + formatDuration(manager.millisUntilNext()) + "后"
+				: "自动备份已停止，/backup now 仍然可以手动备份";
+		source.sendSuccess(() -> Component.literal(message)
+				.withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.YELLOW), true);
+		return 1;
 	}
 
 	private static String sizeOf(Path path) {

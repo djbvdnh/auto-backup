@@ -60,6 +60,19 @@ public class BackupManager {
 		nextBackupAt = System.currentTimeMillis() + config.intervalMinutes * 60_000L;
 	}
 
+	public boolean isEnabled() {
+		return config.enabled;
+	}
+
+	public void setEnabled(boolean enabled) {
+		config.enabled = enabled;
+		config.save();
+		if (enabled) {
+			// 不重新计时的话，nextBackupAt 早就过了，一开启就会立刻备份
+			scheduleNext();
+		}
+	}
+
 	public boolean isRunning() {
 		return currentBackup != null;
 	}
@@ -90,7 +103,7 @@ public class BackupManager {
 		if (server.getPlayerList().getPlayerCount() > 0) {
 			playersOnlineSinceLastBackup = true;
 		}
-		if (isRunning() || System.currentTimeMillis() < nextBackupAt) {
+		if (!config.enabled || isRunning() || System.currentTimeMillis() < nextBackupAt) {
 			return;
 		}
 		if (!playersOnlineSinceLastBackup) {

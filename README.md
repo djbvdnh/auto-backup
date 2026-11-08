@@ -11,6 +11,7 @@
 - 上次备份后没有玩家在线时跳过备份，避免空服产生大量重复备份
 - 关服时如果正在备份，会等备份完成再关闭
 - 游戏内一条命令回档，回档前自动备份当前世界，可以随时撤销
+- 可以用命令随时开启或停止自动备份，重启服务器后仍然保持
 
 ## 安装
 
@@ -29,6 +30,8 @@
 | `/backup now` | 立即备份 |
 | `/backup status` | 查看下次备份时间和上次备份结果 |
 | `/backup reload` | 重新读取配置文件 |
+| `/backup on` | 开启自动备份，从现在起重新计时 |
+| `/backup off` | 停止自动备份，`/backup now` 和回档不受影响 |
 | `/backup list` | 列出所有备份（从新到旧）和大小 |
 | `/backup restore <备份名>` | 选择要回档的备份，支持 Tab 补全 |
 | `/backup confirm` | 30 秒内确认回档，只有发起者能确认 |
@@ -163,7 +166,8 @@ pause
   "intervalMinutes": 30,
   "maxBackups": 10,
   "backupDir": "backups",
-  "announce": true
+  "announce": true,
+  "enabled": true
 }
 ```
 
@@ -173,6 +177,7 @@ pause
 | `maxBackups` | 最多保留多少个备份，`0` 表示不限制 |
 | `backupDir` | 备份存放目录，相对于服务器根目录 |
 | `announce` | 是否在聊天栏通知在线玩家 |
+| `enabled` | 是否开启自动备份，`/backup on` 和 `/backup off` 会修改它 |
 
 修改后执行 `/backup reload` 即可生效。
 
