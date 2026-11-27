@@ -49,6 +49,37 @@ class BackupFilesTest {
 		assertEquals(Collections.emptyList(), BackupFiles.listBackups(dir.resolve("nope"), "world"));
 	}
 
+	// world_test 的备份也以 "world_" 开头，不能被当成 world 的备份
+	@Test
+	void listBackups_ignoresWorldWhoseNameStartsWithThisWorld() throws IOException {
+		touch("world_2026-01-01_00-00-00.zip");
+		touch("world_test_2026-01-02_00-00-00.zip");
+		touch("world_test_2026-01-02_00-00-00_before-restore.zip");
+
+		assertEquals(List.of("world_2026-01-01_00-00-00.zip"), names(BackupFiles.listBackups(dir, "world")));
+	}
+
+	@Test
+	void prune_keepsBackupsOfWorldWhoseNameStartsWithThisWorld() throws IOException {
+		touch("world_2026-01-01_00-00-00.zip");
+		touch("world_test_2026-01-02_00-00-00.zip");
+
+		BackupFiles.prune(dir, "world", 1);
+
+		assertTrue(Files.exists(dir.resolve("world_2026-01-01_00-00-00.zip")));
+		assertTrue(Files.exists(dir.resolve("world_test_2026-01-02_00-00-00.zip")));
+	}
+
+	// 世界名里的 . + ( ) 等字符要按原样匹配
+	@Test
+	void listBackups_worldNameWithSpecialCharacters() throws IOException {
+		touch("my.world (1)+_2026-01-01_00-00-00.zip");
+		touch("myXworld (1)+_2026-01-01_00-00-00.zip");
+
+		assertEquals(List.of("my.world (1)+_2026-01-01_00-00-00.zip"),
+				names(BackupFiles.listBackups(dir, "my.world (1)+")));
+	}
+
 	@Test
 	void prune_keepsNewestN() throws IOException {
 		touch("world_2026-01-01_00-00-00.zip");

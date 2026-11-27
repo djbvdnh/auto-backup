@@ -14,6 +14,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -24,6 +25,10 @@ import java.util.zip.ZipOutputStream;
 public final class BackupFiles {
 	// 不用 AutoBackup.LOGGER：那样会加载 mod 入口类，单元测试里没有 Fabric 环境
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutoBackup.MOD_ID);
+
+	// 备份文件名是“世界名_yyyy-MM-dd_HH-mm-ss.zip”，回档前的备份多一个 _before-restore。
+	// 必须完整匹配时间部分：只看前缀的话，world_test 的备份也会被当成 world 的
+	private static final String BACKUP_SUFFIX = "_\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}(_before-restore)?\\.zip";
 
 	private BackupFiles() {
 	}
@@ -71,12 +76,11 @@ public final class BackupFiles {
 		if (!Files.isDirectory(backupRoot)) {
 			return List.of();
 		}
+		// Pattern.quote：世界名里的 . + ( ) 等字符按原样匹配
+		Pattern backupName = Pattern.compile(Pattern.quote(worldName) + BACKUP_SUFFIX);
 		try (Stream<Path> files = Files.list(backupRoot)) {
 			return files
-					.filter(path -> {
-						String name = path.getFileName().toString();
-						return name.startsWith(worldName + "_") && name.endsWith(".zip");
-					})
+					.filter(path -> backupName.matcher(path.getFileName().toString()).matches())
 					.sorted(Comparator.reverseOrder())
 					.toList();
 		}
